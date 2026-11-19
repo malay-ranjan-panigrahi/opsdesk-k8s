@@ -24,5 +24,8 @@ spec:
 
   # Allow Argo CD to create the target namespace
   syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
     syncOptions:
       - CreateNamespace=true
