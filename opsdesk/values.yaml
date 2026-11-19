@@ -1,0 +1,98 @@
+# Backend replica configuration.
+backend:
+  replicaCount: 1
+
+  # Backend Docker image configuration.
+  image:
+    repository: malaynew07/opsdesk-backend
+    tag: "12"
+    pullPolicy: IfNotPresent
+
+  # Backend container port.
+  containerPort: 8000
+
+  # Backend Kubernetes Service configuration.
+  service:
+    port: 8000
+
+  # Backend application environment configuration.
+  env:
+    appEnv: production
+    apiV1Prefix: /api/v1
+    jwtAlgorithm: HS256
+    accessTokenExpireMinutes: 30
+    corsOrigins: '["http://opsdesk.local"]'
+
+  # CPU and memory allocation.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# Reference to the Kubernetes Secret containing sensitive credentials.
+secrets:
+  existingSecret: opsdesk-secrets
+
+# Frontend replica configuration.
+frontend:
+  replicaCount: 1
+
+  # Frontend Docker image configuration.
+  image:
+    repository: malaynew07/opsdesk-frontend
+    tag: "12"
+    pullPolicy: IfNotPresent
+
+  # NGINX container listening port.
+  containerPort: 8080
+
+  # Frontend Kubernetes Service port.
+  service:
+    port: 80
+
+  # CPU and memory allocation for the frontend container.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+# PostgreSQL database configuration.
+postgres:
+  image:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+
+  # Internal database Service port.
+  service:
+    port: 5432
+
+  # Persistent storage allocated to PostgreSQL.
+  storage:
+    size: 5Gi
+    storageClassName: standard
+
+  # Database resource allocation.
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# External HTTP routing configuration.
+ingress:
+  enabled: true
+
+  # F5 NGINX Ingress Controller class.
+  className: nginx
+
+  # Hostname used to access OpsDesk.
+  host: opsdesk.local

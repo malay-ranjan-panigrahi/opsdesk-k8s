@@ -1,0 +1,17 @@
+# Helm chart API version.
+apiVersion: v2
+
+# Helm chart name.
+name: opsdesk
+
+# Description of the application deployment package.
+description: Helm chart for deploying the OpsDesk IT Incident Management System.
+
+# This chart deploys an application.
+type: application
+
+# Increment this when the Helm chart configuration or templates change.
+version: 0.1.0
+
+# Version of the OpsDesk application deployed by this chart.
+appVersion: "12"

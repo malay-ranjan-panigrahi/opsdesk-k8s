@@ -1,0 +1,35 @@
+# Kubernetes API version for Service resources.
+apiVersion: v1
+
+# Service provides a stable internal endpoint for backend Pods.
+kind: Service
+
+metadata:
+  # Service name used for internal Kubernetes DNS discovery.
+  name: {{ .Release.Name }}-backend
+
+  # Install this Service in the Helm release namespace.
+  namespace: {{ .Release.Namespace }}
+
+  # Labels identify this application resource.
+  labels:
+    app.kubernetes.io/name: opsdesk-backend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+spec:
+  # ClusterIP exposes the backend only inside the Kubernetes cluster.
+  type: ClusterIP
+
+  # Select backend Pods belonging to this Helm release.
+  selector:
+    app.kubernetes.io/name: opsdesk-backend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+  # Define the network port exposed by the Service.
+  ports:
+    - name: http
+      port: {{ .Values.backend.service.port }}
+
+      # Forward traffic to the named HTTP port in backend Pods.
+      targetPort: http
+      protocol: TCP

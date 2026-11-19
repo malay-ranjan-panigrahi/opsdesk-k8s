@@ -1,0 +1,111 @@
+# Kubernetes API version for Job resources.
+apiVersion: batch/v1
+
+# Job runs a finite task and exits after completion.
+kind: Job
+
+metadata:
+  # Job name associated with the Helm release.
+  name: {{ .Release.Name }}-migrations
+
+  # Run the migration Job in the release namespace.
+  namespace: {{ .Release.Namespace }}
+
+  annotations:
+    # Execute this Job during the Argo CD synchronization process.
+    argocd.argoproj.io/hook: Sync
+
+    # Run the migration after the PostgreSQL StatefulSet.
+    argocd.argoproj.io/sync-wave: "-1"
+
+    # Remove an older Job before creating a new one and delete successful Jobs.
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation,HookSucceeded
+
+spec:
+  # Retry the migration task up to two times if it fails.
+  backoffLimit: 2
+
+  # Stop the Job if it exceeds the configured execution time.
+  activeDeadlineSeconds: 600
+
+  # Define the Pod that performs the database migration.
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: opsdesk-migrations
+        app.kubernetes.io/instance: {{ .Release.Name }}
+
+    spec:
+      # Job Pods must not restart automatically after termination.
+      restartPolicy: Never
+
+      # Database readiness check runs before the migration container.
+      initContainers:
+        - name: wait-for-postgres
+
+          # Use PostgreSQL utilities to check database readiness.
+          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+
+          command:
+            - sh
+            - -c
+            - |
+              # Wait until PostgreSQL accepts connections.
+              until pg_isready -h {{ .Release.Name }}-postgres -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"; do
+                echo "Waiting for PostgreSQL to become ready..."
+                sleep 5
+              done
+
+              echo "PostgreSQL is ready."
+
+          # Read database identity from the Kubernetes Secret.
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: POSTGRES_DB
+
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: POSTGRES_USER
+
+      # Main container executes the Alembic schema migration.
+      containers:
+        - name: database-migration
+
+          # Use the same backend image as the application.
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+
+          # Apply all pending migrations to the database.
+          command:
+            - alembic
+            - upgrade
+            - head
+
+          # Supply the database connection and application signing key.
+          env:
+            - name: APP_ENV
+              value: {{ .Values.backend.env.appEnv | quote }}
+
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: DATABASE_URL
+
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: JWT_SECRET_KEY
+
+          # Prevent privilege escalation inside the migration container.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

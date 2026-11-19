@@ -1,0 +1,83 @@
+# Kubernetes API version for Deployment resources.
+apiVersion: apps/v1
+
+# Deployment manages the frontend Pod lifecycle.
+kind: Deployment
+
+metadata:
+  # Helm release name identifies this Deployment.
+  name: {{ .Release.Name }}-frontend
+
+  # Install the Deployment in the Helm release namespace.
+  namespace: {{ .Release.Namespace }}
+
+  # Labels identify and organize the frontend resource.
+  labels:
+    app.kubernetes.io/name: opsdesk-frontend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+spec:
+  # Number of frontend Pod replicas to maintain.
+  replicas: {{ .Values.frontend.replicaCount }}
+
+  # Select Pods belonging to this frontend release.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opsdesk-frontend
+      app.kubernetes.io/instance: {{ .Release.Name }}
+
+  # Pod template defines the frontend container configuration.
+  template:
+    metadata:
+      labels:
+        # These labels must match the Deployment selector.
+        app.kubernetes.io/name: opsdesk-frontend
+        app.kubernetes.io/instance: {{ .Release.Name }}
+
+    spec:
+      # Run the NGINX container using its unprivileged user.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: frontend
+
+          # Frontend image and tag are controlled through values.yaml.
+          image: "{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+
+          # The frontend NGINX server listens on port 8080.
+          ports:
+            - name: http
+              containerPort: {{ .Values.frontend.containerPort }}
+              protocol: TCP
+
+          # Readiness probe determines when the frontend can receive traffic.
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+
+          # Liveness probe restarts the container if its HTTP server becomes unhealthy.
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+
+          # CPU and memory allocations come from values.yaml.
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+
+          # Prevent privilege escalation and remove unnecessary Linux capabilities.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

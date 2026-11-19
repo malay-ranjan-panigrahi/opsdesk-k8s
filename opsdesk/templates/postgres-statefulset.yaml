@@ -1,0 +1,140 @@
+# Kubernetes API version for StatefulSet resources.
+apiVersion: apps/v1
+
+# StatefulSet manages PostgreSQL with stable identity and persistent storage.
+kind: StatefulSet
+
+metadata:
+  # StatefulSet name matches the PostgreSQL headless Service.
+  name: {{ .Release.Name }}-postgres
+
+  # Install the StatefulSet in the Helm release namespace.
+  namespace: {{ .Release.Namespace }}
+
+  # Identify this PostgreSQL resource.
+  labels:
+    app.kubernetes.io/name: opsdesk-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+  # Start PostgreSQL after its headless Service is created.
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+
+spec:
+  # Headless Service provides stable network identity for the Pod.
+  serviceName: {{ .Release.Name }}-postgres
+
+  # Maintain one PostgreSQL database instance.
+  replicas: 1
+
+  # Select the PostgreSQL Pods managed by this StatefulSet.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opsdesk-postgres
+      app.kubernetes.io/instance: {{ .Release.Name }}
+
+  # Define the PostgreSQL Pod configuration.
+  template:
+    metadata:
+      labels:
+        # These labels must match the StatefulSet selector.
+        app.kubernetes.io/name: opsdesk-postgres
+        app.kubernetes.io/instance: {{ .Release.Name }}
+
+    spec:
+      # Allow PostgreSQL time to shut down cleanly.
+      terminationGracePeriodSeconds: 30
+
+      containers:
+        - name: postgres
+
+          # PostgreSQL image and version are configured in values.yaml.
+          image: "{{ .Values.postgres.image.repository }}:{{ .Values.postgres.image.tag }}"
+          imagePullPolicy: {{ .Values.postgres.image.pullPolicy }}
+
+          # PostgreSQL listens on TCP port 5432.
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+
+          # Initialize the database using credentials from a Kubernetes Secret.
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: POSTGRES_DB
+
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: POSTGRES_USER
+
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: POSTGRES_PASSWORD
+
+            # Store database files in a dedicated subdirectory of the mounted volume.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+
+          # Startup probe allows PostgreSQL time to initialize.
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'pg_isready -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+            periodSeconds: 10
+            failureThreshold: 30
+
+          # Readiness probe determines when the database can accept connections.
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'pg_isready -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+            periodSeconds: 10
+            failureThreshold: 3
+
+          # Liveness probe detects an unresponsive PostgreSQL process.
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'pg_isready -h 127.0.0.1 -p 5432 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+            periodSeconds: 20
+            failureThreshold: 3
+
+          # Mount persistent storage at the PostgreSQL data directory.
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
+
+          # CPU and memory allocation come from values.yaml.
+          resources:
+            {{- toYaml .Values.postgres.resources | nindent 12 }}
+
+  # Create a separate persistent volume claim for the PostgreSQL Pod.
+  volumeClaimTemplates:
+    - metadata:
+        name: postgres-data
+
+      spec:
+        # ReadWriteOnce allows the volume to be mounted read-write by one node.
+        accessModes:
+          - ReadWriteOnce
+
+        # Select the Kubernetes storage provisioner.
+        storageClassName: {{ .Values.postgres.storage.storageClassName | quote }}
+
+        # Request the configured persistent storage capacity.
+        resources:
+          requests:
+            storage: {{ .Values.postgres.storage.size }}

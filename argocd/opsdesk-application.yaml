@@ -1,0 +1,28 @@
+# Argo CD Application for OpsDesk
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+
+metadata:
+  name: opsdesk
+  namespace: argocd
+
+spec:
+  project: default
+
+  # Git repository containing the Helm chart
+  source:
+    repoURL: https://github.com/malay-ranjan-panigrahi/opsdesk-k8s.git
+    targetRevision: main
+    path: opsdesk
+    helm:
+      releaseName: opsdesk
+
+  # Target Kubernetes cluster and namespace
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: opsdesk
+
+  # Allow Argo CD to create the target namespace
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true

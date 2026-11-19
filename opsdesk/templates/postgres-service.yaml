@@ -1,0 +1,37 @@
+# Kubernetes API version for Service resources.
+apiVersion: v1
+
+# Headless Service provides stable DNS identity for PostgreSQL.
+kind: Service
+
+metadata:
+  # Service name is also referenced by the PostgreSQL StatefulSet.
+  name: {{ .Release.Name }}-postgres
+
+  # Install the Service in the Helm release namespace.
+  namespace: {{ .Release.Namespace }}
+
+  # Create the Service before the PostgreSQL StatefulSet.
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+
+  # Labels identify the PostgreSQL Service.
+  labels:
+    app.kubernetes.io/name: opsdesk-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+spec:
+  # Headless Service returns Pod IP addresses directly through DNS.
+  clusterIP: None
+
+  # Select the PostgreSQL Pod belonging to this Helm release.
+  selector:
+    app.kubernetes.io/name: opsdesk-postgres
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+  # Expose the standard PostgreSQL TCP port.
+  ports:
+    - name: postgresql
+      port: {{ .Values.postgres.service.port }}
+      targetPort: postgresql
+      protocol: TCP

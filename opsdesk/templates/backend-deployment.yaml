@@ -1,0 +1,122 @@
+# Kubernetes API version for Deployment resources.
+apiVersion: apps/v1
+
+# Deployment manages the lifecycle and replica count of backend Pods.
+kind: Deployment
+
+metadata:
+  # Release name keeps resource names consistent with Helm.
+  name: {{ .Release.Name }}-backend
+
+  # Namespace where Helm installs this application.
+  namespace: {{ .Release.Namespace }}
+
+  # Labels identify and organize this resource.
+  labels:
+    app.kubernetes.io/name: opsdesk-backend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+spec:
+  # Number of backend Pod replicas to maintain.
+  replicas: {{ .Values.backend.replicaCount }}
+
+  # Selector identifies the Pods managed by this Deployment.
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: opsdesk-backend
+      app.kubernetes.io/instance: {{ .Release.Name }}
+
+  # Pod template defines how each backend Pod is created.
+  template:
+    metadata:
+      labels:
+        # These labels must match the Deployment selector.
+        app.kubernetes.io/name: opsdesk-backend
+        app.kubernetes.io/instance: {{ .Release.Name }}
+
+    spec:
+      # Run the container with the non-root user used by the backend image.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        seccompProfile:
+          type: RuntimeDefault
+
+      containers:
+        - name: backend
+
+          # Docker image and version are configured in values.yaml.
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+
+          # Port exposed by the FastAPI application inside the container.
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.containerPort }}
+              protocol: TCP
+
+          # Application configuration passed as environment variables.
+          env:
+            - name: APP_ENV
+              value: {{ .Values.backend.env.appEnv | quote }}
+
+            - name: API_V1_PREFIX
+              value: {{ .Values.backend.env.apiV1Prefix | quote }}
+
+            - name: JWT_ALGORITHM
+              value: {{ .Values.backend.env.jwtAlgorithm | quote }}
+
+            - name: ACCESS_TOKEN_EXPIRE_MINUTES
+              value: {{ .Values.backend.env.accessTokenExpireMinutes | quote }}
+
+            - name: CORS_ORIGINS
+              value: {{ .Values.backend.env.corsOrigins | quote }}
+
+            # Read the database connection URL from an existing Kubernetes Secret.
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: DATABASE_URL
+
+            # Read the JWT signing key from the same Secret.
+            - name: JWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: JWT_SECRET_KEY
+
+          # Startup probe allows the application time to initialize.
+          startupProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 10
+            failureThreshold: 30
+
+          # Readiness probe controls when the Pod can receive traffic.
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: http
+            periodSeconds: 10
+            failureThreshold: 3
+
+          # Liveness probe restarts the container if the application becomes unhealthy.
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: http
+            periodSeconds: 20
+            failureThreshold: 3
+
+          # CPU and memory allocation come from values.yaml.
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+
+          # Prevent privilege escalation and remove unnecessary Linux capabilities.
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL

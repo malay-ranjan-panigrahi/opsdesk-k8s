@@ -1,0 +1,44 @@
+# Kubernetes API version for Ingress resources.
+apiVersion: networking.k8s.io/v1
+
+# Ingress defines external HTTP routing rules for OpsDesk.
+kind: Ingress
+
+metadata:
+  # Helm release name identifies this Ingress.
+  name: {{ .Release.Name }}-ingress
+
+  # Install the Ingress in the Helm release namespace.
+  namespace: {{ .Release.Namespace }}
+
+  # Labels identify the application resource.
+  labels:
+    app.kubernetes.io/name: opsdesk
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+spec:
+  # F5 NGINX Ingress Controller will handle this Ingress.
+  ingressClassName: {{ .Values.ingress.className }}
+
+  # Define HTTP routing rules for the OpsDesk hostname.
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          # Route API requests to the FastAPI backend.
+          - path: /api/v1
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-backend
+                port:
+                  number: {{ .Values.backend.service.port }}
+
+          # Route all remaining requests to the React frontend.
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-frontend
+                port:
+                  number: {{ .Values.frontend.service.port }}

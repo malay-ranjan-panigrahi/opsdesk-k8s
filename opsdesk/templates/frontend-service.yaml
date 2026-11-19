@@ -1,0 +1,35 @@
+# Kubernetes API version for Service resources.
+apiVersion: v1
+
+# Service provides a stable internal network endpoint for frontend Pods.
+kind: Service
+
+metadata:
+  # Service name used for Kubernetes DNS discovery.
+  name: {{ .Release.Name }}-frontend
+
+  # Install this Service in the Helm release namespace.
+  namespace: {{ .Release.Namespace }}
+
+  # Labels identify and organize the frontend resource.
+  labels:
+    app.kubernetes.io/name: opsdesk-frontend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+spec:
+  # ClusterIP exposes the frontend Service inside the cluster.
+  type: ClusterIP
+
+  # Select only frontend Pods belonging to this Helm release.
+  selector:
+    app.kubernetes.io/name: opsdesk-frontend
+    app.kubernetes.io/instance: {{ .Release.Name }}
+
+  # Define the Service network port and its container destination.
+  ports:
+    - name: http
+      port: {{ .Values.frontend.service.port }}
+
+      # Forward traffic to the named HTTP port in frontend Pods.
+      targetPort: http
+      protocol: TCP
