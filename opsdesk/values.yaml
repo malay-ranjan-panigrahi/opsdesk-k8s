@@ -5,7 +5,7 @@ backend:
   # Backend Docker image configuration.
   image:
     repository: malaynew07/opsdesk-backend
-    tag: "12"
+    tag: "14"
     pullPolicy: IfNotPresent
 
   # Backend container port.
@@ -43,7 +43,7 @@ frontend:
   # Frontend Docker image configuration.
   image:
     repository: malaynew07/opsdesk-frontend
-    tag: "12"
+    tag: "14"
     pullPolicy: IfNotPresent
 
   # NGINX container listening port.
